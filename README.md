@@ -17,7 +17,7 @@ Evaluation: eval.py\
 Check PH: PH.py
 
 ## Reference
-[1] Kingma, D. P., & Welling, M. (2013). Auto-Encoding Variational Bayes, (Ml), 1–14. https://doi.org/10.1051/0004-6361/201527329
+[1] Kingma, D. P., & Welling, M. (2013). "Auto-Encoding Variational Bayes", (Ml), 1–14. https://doi.org/10.1051/0004-6361/201527329
 
 [2] James R. Clough, et al. (2019). "A Topological Loss Function for Deep-Learning based Image Segmentation using Persistent Homology". https://arxiv.org/abs/1910.01877
 
