@@ -1,5 +1,5 @@
 # Topological-DVAE
-An implementation of Denoising-Variational AutoEncoder with Topological loss
+An implementation of Denoising Variational AutoEncoder with Topological loss
 
 ## Requirements
 ```
