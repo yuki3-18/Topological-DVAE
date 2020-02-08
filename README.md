@@ -13,8 +13,8 @@ An implementation of Denoising-Variational AutoEncoder with Topological loss
 
 ## Usage
 Training Model: main.py\
-Reconstructing Image: predict_gen.py\
-Check : predict_spe.py
+Evaluation: eval.py\
+Check PH: PH.py
 
 ## Reference
 [1] Kingma, D. P., & Welling, M. (2013). Auto-Encoding Variational Bayes, (Ml), 1–14. https://doi.org/10.1051/0004-6361/201527329
@@ -26,4 +26,3 @@ Check : predict_spe.py
 [4] https://github.com/JamesClough/topograd
 
 [5] https://github.com/bruel-gabrielsson/TopologyLayer
-
