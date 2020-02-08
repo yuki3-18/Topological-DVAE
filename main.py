@@ -345,7 +345,7 @@ if __name__ == "__main__":
         if val_loss < val_loss_min - min_delta:
             epochs_no_improve = 0
             val_loss_min = val_loss
-            # modelの保存
+            # save model
             if epoch > args.log_interval:
                 path = os.path.join(outdir, 'weight/')
                 if not (os.path.exists(path)):
