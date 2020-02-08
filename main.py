@@ -199,7 +199,7 @@ def topological_loss(recon_x, x):
     f2 = SumBarcodeLengths(dim=2)
     for i in range(batch_size):
         dgminfo = layer(recon_x.view(batch_size, 9, 9, 9)[i])
-        b01 += ((1 - f01(dgminfo)) ** 2).sum()
+        b01 += ((1 - f01(dgminfo)**2)).sum()
         b0 += (f0(dgminfo) ** 2).sum()
         b1 += (f1(dgminfo) ** 2).sum()
         b2 += (f2(dgminfo) ** 2).sum()
