@@ -1,7 +1,10 @@
+'''
+# Visualization of an image and its PH
+# Author: Yuki Saeki
+'''
+
 from utils import *
-import dataIO as io
 import argparse
-from tqdm import trange
 
 parser = argparse.ArgumentParser(description='VAE test')
 parser.add_argument('--input', type=str, default="E:/git/DAE/results/artificial/z_24/B_0.1/R_10000.0/gen/rec/list.txt",

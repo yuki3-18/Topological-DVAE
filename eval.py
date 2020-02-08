@@ -1,5 +1,5 @@
 '''
-# Reconstruct image and evalute the performance by Generalization
+# Evaluation by Generalization and Specificity
 # Author: Yuki Saeki
 '''
 

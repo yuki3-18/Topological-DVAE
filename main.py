@@ -1,3 +1,9 @@
+'''
+# Training model
+# Author: Yuki Saeki
+# Reference: https://github.com/JamesClough/topograd, https://github.com/bruel-gabrielsson/TopologyLayer, https://github.com/pytorch/examples/tree/master/vae
+'''
+
 from __future__ import print_function
 import argparse
 import os
@@ -5,20 +11,15 @@ import torch
 import torch.utils.data
 from torch import nn, optim
 from torch.nn import functional as F
-from torchvision import datasets, transforms
-from torchvision.utils import save_image
 from torchsummary import summary
 from torch.utils.tensorboard import SummaryWriter
 from visdom import Visdom
-
 import cloudpickle
 from utils import add_noise, init_tri_complex_3d
 import numpy as np
-import matplotlib.pyplot as plt
 import dataIO as io
 from tqdm import trange
 from topologylayer.nn import *
-# from topologylayer.functional.utils_dionysus import *
 
 parser = argparse.ArgumentParser(description='VAE')
 parser.add_argument('--input', type=str, default="E:/git/pytorch/vae/input/s0/filename.txt",

@@ -5,8 +5,6 @@ import matplotlib.cm as cm
 import gudhi as gd
 import dataIO as io
 import torch
-import torch.nn as nn
-from topologylayer.nn.features import pad_k
 from mpl_toolkits.mplot3d import axes3d
 from topologylayer.functional.persistence import SimplicialComplex
 from topologylayer.util.construction import unique_simplices
