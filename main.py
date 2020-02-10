@@ -27,7 +27,7 @@ parser.add_argument('--input', type=str, default="E:/git/pytorch/vae/input/s0/fi
 parser.add_argument('--batch-size', type=int, default=128, metavar='N',
                     help='input batch size for training (default: 128)')
 parser.add_argument('--epochs', type=int, default=2000, metavar='N',
-                    help='number of epochs to train (default: 10)')
+                    help='number of epochs to train')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='enables CUDA training')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
