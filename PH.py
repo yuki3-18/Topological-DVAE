@@ -7,11 +7,11 @@ from utils import *
 import argparse
 
 parser = argparse.ArgumentParser(description='VAE test')
-parser.add_argument('--input', type=str, default="E:/git/DAE/results/artificial/z_24/B_0.1/R_10000.0/gen/rec/list.txt",
+parser.add_argument('--input', type=str, default="E:/git/Topological-DVAE/results/artificial/z_24/B_0.1/R_0/gen/ori/list.txt",
                     help='File path of input images')
 parser.add_argument('--patch_side', type=int, default=9,
                     help='how long patch side for input')
-parser.add_argument('--num_of_data', type=int, default=474,
+parser.add_argument('--num_of_data', type=int, default=1325,
                     help='number of dataset')
 parser.add_argument('--output', type=str, default="E:/git/DAE/results/z_24/B_0.1/R_0/gen/",
                     help='File path of output images')

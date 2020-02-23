@@ -7,6 +7,7 @@
 from __future__ import print_function
 import argparse
 import os
+import json
 import torch
 import torch.utils.data
 from torch import nn, optim
@@ -38,8 +39,8 @@ parser.add_argument('--beta', type=float, default=0.1, metavar='B',
                     help='beta')
 parser.add_argument('--ramda', type=float, default=0, metavar='R',
                     help='ramda')
-parser.add_argument('--topo', '-t', type=bool, default=False, help='topo')
-parser.add_argument('--constrain', '-c', type=bool, default=False, help='topo con')
+parser.add_argument('--topo', '-t', action='store_true', default=False, help='topo')
+parser.add_argument('--constrain', '-c', action='store_true', default=False, help='topo con')
 parser.add_argument('--mode', type=int, default=0,
                     help='[mode: process] = [0: artificial], [1: real], [2: debug]')
 parser.add_argument('--model', type=str, default="",
@@ -83,6 +84,10 @@ writer = SummaryWriter(log_dir=outdir+"logs")
 
 if not (os.path.exists(outdir)):
     os.makedirs(outdir)
+
+# save parameters
+with open(os.path.join(outdir, "params.json"), mode="w") as f:
+    json.dump(args.__dict__, f, indent=4)
 
 print('load data')
 list = io.load_list(args.input)
