@@ -20,9 +20,9 @@ from topologylayer.nn.levelset import *
 from tqdm import trange
 
 parser = argparse.ArgumentParser(description='VAE test')
-parser.add_argument('--input', type=str, default="E:/git/pytorch/vae/input/s0/filename.txt",
+parser.add_argument('--input', type=str, default="./input/s0/filename.txt",
                     help='File path of input images')
-parser.add_argument('--outdir', type=str, default="E:/git/DAE/results/artificial/z_24/B_0.1/R_0/",
+parser.add_argument('--outdir', type=str, default="./results/artificial/z_24/B_0.1/L_0/",
                     help='File path of output images')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='enables CUDA')
