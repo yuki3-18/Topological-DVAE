@@ -281,3 +281,25 @@ def add_noise(img, device):
     noisy_img[noisy_img>=1.] = 1.
     noisy_img[noisy_img<=0.] = 0.
     return noisy_img
+
+def calc_PH(data):
+    z, y, x = data.shape
+    size = x * y * z
+    # data = np.ndarray(data, [z, y, x])
+    cpx = init_tri_complex_3d(z, y, x)
+    layer = LevelSetLayer(cpx, maxdim=2, sublevel=False)
+    dgminfo = layer(torch.from_numpy(data).float())
+    # f01 = TopKBarcodeLengths(dim=0, k=1)
+    f0 = TopKBarcodeLengths(dim=0, k=size)
+    f1 = TopKBarcodeLengths(dim=1, k=size)
+    f2 = TopKBarcodeLengths(dim=2, k=size)
+    b01 = f0(dgminfo)[0]
+    b0 = f0(dgminfo)[1:].sum()
+    b1 = f1(dgminfo).sum()
+    b2 = f2(dgminfo).sum()
+    l01 = 1. - f0(dgminfo)[0]**2
+    l0 = (f0(dgminfo)[1:]**2).sum()
+    l1 = (f1(dgminfo)**2).sum()
+    l2 = (f2(dgminfo)**2).sum()
+
+    return b01, b0, b1, b2, l01, l0, l1, l2
