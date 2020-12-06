@@ -25,9 +25,9 @@ data_set = get_dataset(args.input, args.patch_side, args.num_of_data)
 
 # data_set = data_set > 0.25
 # display image
-display_slices(data_set[args.num_of_data-1:args.num_of_data,:])
+display_slices(data_set[args.num_of_data - 1:args.num_of_data, :])
 # print(data_set[args.num_of_data-1:args.num_of_data,:])
 
 # plot PH diagram
-PH_diag(data_set[args.num_of_data-1])
+PH_diag(data_set[args.num_of_data - 1])
 # save_PH_diag(data_set[args.num_of_data-1], args.patch_side, args.output)

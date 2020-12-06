@@ -10,24 +10,27 @@ import os
 import json
 import torch
 import torch.utils.data
-from torch import nn, optim
+from torch import optim
 from torch.nn import functional as F
 from torchsummary import summary
 from torch.utils.tensorboard import SummaryWriter
 from visdom import Visdom
 import cloudpickle
-from utils import add_noise, init_tri_complex_3d
 import numpy as np
-import dataIO as io
 from tqdm import trange
-from topologylayer.nn import *
+from topologylayer.nn import LevelSetLayer, TopKBarcodeLengths, SumBarcodeLengths, PartialSumBarcodeLengths
+import dataIO as io
+from solver import VAE, init_tri_complex_3d, TopLoss, erosion_layer
+from utils import add_noise, min_max
 
-parser = argparse.ArgumentParser(description='VAE')
-parser.add_argument('--input', type=str, default="CT/",
+parser = argparse.ArgumentParser(description='Topological-DVAE')
+parser.add_argument('--input', type=str, default="E:/git/pytorch/vae/input/hole/rank/filename.txt",
+                    help='File path of input images')
+parser.add_argument('--output', type=str, default="./results/",
                     help='File path of input images')
 parser.add_argument('--batch-size', type=int, default=128, metavar='N',
                     help='input batch size for training (default: 128)')
-parser.add_argument('--epochs', type=int, default=2000, metavar='N',
+parser.add_argument('--epochs', type=int, default=10000, metavar='N',
                     help='number of epochs to train')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='enables CUDA training')
@@ -35,14 +38,14 @@ parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
 parser.add_argument('--log-interval', type=int, default=10, metavar='N',
                     help='how many batches to wait before logging training status')
-parser.add_argument('--beta', type=float, default=0.1, metavar='B',
+parser.add_argument('--beta', type=float, default=1, metavar='B',
                     help='beta')
 parser.add_argument('--lam', type=float, default=0, metavar='L',
                     help='lambda')
-parser.add_argument('--topo', '-t', action='store_true', default=False, help='topo')
-parser.add_argument('--constrain', '-c', action='store_true', default=False, help='topo con')
+parser.add_argument('--topo', '-t', action='store_true', default=True, help='topo')
+parser.add_argument('--erosion', '-e', action='store_true', default=True, help='use erosion layer')
 parser.add_argument('--mode', type=int, default=0,
-                    help='[mode: process] = [0: artificial], [1: real], [2: debug]')
+                    help='[mode: process] = [0: Train], [1: Debug]')
 parser.add_argument('--model', type=str, default="",
                     help='File path of loaded model')
 parser.add_argument('--latent_dim', type=int, default=24,
@@ -60,41 +63,22 @@ viz = Visdom()
 
 # setting
 patch_side = 9
-
-data_path = os.path.join("./input/", args.input, "filename.txt")
-
-if args.mode==0:
-    num_of_data = 10000
-    num_of_test = 2000
-    num_of_val = 2000
-    outdir = os.path.join("./results/artificial/", args.input, "z_{}/B_{}/L_{}/".format(args.latent_dim, args.beta, args.lam))
-elif args.constrain==True:
-    num_of_data = 1978
-    num_of_test = 467
-    num_of_val = 425
-    outdir = "./results/CT/con/z_{}/B_{}/L_{}/".format(args.latent_dim, args.beta, args.lam)
-elif args.mode==1:
-    num_of_data = 3039
-    num_of_test = 607
-    num_of_val = 607
-    outdir = "./results/CT/z_{}/B_{}/L_{}/".format(args.latent_dim, args.beta, args.lam)
-else:
-    num_of_data = 10000
-    num_of_test = 2000
-    num_of_val = 2000
-    outdir = "./results/debug/".format(args.latent_dim, args.beta, args.lam)
+num_of_data = 10000
+num_of_test = 2000
+num_of_val = 2000
+data_path = args.input
+outdir = args.output
 
 if not (os.path.exists(outdir)):
     os.makedirs(outdir)
-
 
 # save parameters
 with open(os.path.join(outdir, "params.json"), mode="w") as f:
     json.dump(args.__dict__, f, indent=4)
 
-writer = SummaryWriter(log_dir=outdir+"logs")
+writer = SummaryWriter(log_dir=outdir + "logs")
 
-print('-'*20, 'loading data', '-'*20)
+print('-' * 20, 'loading data', '-' * 20)
 list = io.load_list(data_path)
 data_set = np.zeros((len(list), patch_side, patch_side, patch_side))
 
@@ -102,70 +86,34 @@ for i in trange(len(list)):
     data_set[i, :] = np.reshape(io.read_mhd_and_raw(list[i]), [patch_side, patch_side, patch_side])
 
 data = data_set.reshape(num_of_data, patch_side * patch_side * patch_side)
-
-# standardization
-def min_max(x, axis=None):
-    x_min = x.min(axis=axis, keepdims=True)
-    x_max = x.max(axis=axis, keepdims=True)
-    return (x - x_min) / (x_max - x_min)
-
 data = min_max(data, axis=1)
 
 # split data
 test_data = torch.from_numpy(data[:num_of_test]).float()
-val_data = torch.from_numpy(data[num_of_test:num_of_test+num_of_val]).float().to(device)
-train_data = torch.from_numpy(data[num_of_test+num_of_val:]).float().to(device)
+val_data = torch.from_numpy(data[num_of_test:num_of_test + num_of_val]).float().to(device)
+train_data = torch.from_numpy(data[num_of_test + num_of_val:]).float().to(device)
 
 train_loader = torch.utils.data.DataLoader(train_data,
-                          batch_size=args.batch_size,
-                          shuffle=True,
-                          num_workers=0,
-                          pin_memory=False,
-                          drop_last=True)
+                                           batch_size=args.batch_size,
+                                           shuffle=True,
+                                           num_workers=0,
+                                           pin_memory=False,
+                                           drop_last=True)
 val_loader = torch.utils.data.DataLoader(val_data,
-                          batch_size=args.batch_size,
-                          shuffle=True,
-                          num_workers=0,
-                          pin_memory=False,
-                          drop_last=True)
+                                         batch_size=args.batch_size,
+                                         shuffle=True,
+                                         num_workers=0,
+                                         pin_memory=False,
+                                         drop_last=True)
 
 # initialize list for plot graph after training
 train_loss_list, val_loss_list = [], []
-
-# VAE
-class VAE(nn.Module):
-    def __init__(self, latent_dim):
-        super(VAE, self).__init__()
-
-        self.fc1 = nn.Linear(patch_side**3, 200)
-        self.fc21 = nn.Linear(200, latent_dim)
-        self.fc22 = nn.Linear(200, latent_dim)
-        self.fc3 = nn.Linear(latent_dim, 200)
-        self.fc4 = nn.Linear(200, patch_side**3)
-
-    def encode(self, x):
-        h1 = F.relu(self.fc1(x))
-        return self.fc21(h1), self.fc22(h1)
-
-    def reparameterize(self, mu, logvar):
-        std = torch.exp(0.5*logvar)
-        eps = torch.randn_like(std)
-        return mu + eps*std
-
-    def decode(self, z):
-        h3 = F.relu(self.fc3(z))
-        return torch.sigmoid(self.fc4(h3))
-
-    def forward(self, x):
-        mu, logvar = self.encode(x.view(-1, patch_side**3))
-        z = self.reparameterize(mu, logvar)
-        return self.decode(z), mu, logvar
 
 # define model
 if args.model:
     with open(args.model, 'rb') as f:
         model = cloudpickle.load(f).to(device)
-    summary(model, (1, patch_side**3))
+    summary(model, (1, patch_side ** 3))
 else:
     model = VAE(args.latent_dim).to(device)
 
@@ -179,31 +127,53 @@ def loss_function(recon_x, x, mu, logvar):
     assert batch_size != 0
 
     # BCE = F.binary_cross_entropy(recon_x, x.view(-1, patch_side**3), reduction='sum')
-    MSE = F.mse_loss(recon_x, x, size_average=False).div(batch_size)
-    SE = MSE*feature_size
+    REC = F.mse_loss(recon_x, x, size_average=False, reduction='sum').div(batch_size)
+
     # see Appendix B from VAE paper:
     # Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
     # https://arxiv.org/abs/1312.6114
     # 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
-    KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+    KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp()).div(batch_size)
     KLD *= args.beta
 
-    if args.topo==True:
-        topo, b01, b0, b1, b2 = topological_loss(recon_x, x)
-        topo, b01, b0, b1, b2 = topo*args.lam, b01*args.lam, b0*args.lam, b1*args.lam, b2*args.lam
-        total_loss = SE + KLD + topo
-        return total_loss, SE, KLD, topo, b01, b0, b1, b2
+    if args.topo == True:
+        topo, b01, b0, b1, b2 = 0., 0., 0., 0., 0.
+        topo_e, b01_e, b0_e, b1_e, b2_e = 0., 0., 0., 0., 0.
+        if args.erosion == True:
+            erosion_img = erosion_layer(recon_x.view(batch_size, 1, patch_side, patch_side, patch_side))
+        for i in range(batch_size):
+            data = recon_x.view(batch_size, patch_side, patch_side, patch_side)[i]
+            topo_loss = TopLoss()
+            t, t01, t0, t1, t2 = topo_loss(data)
+            topo += t
+            b01 += t01
+            b0 += t0
+            b1 += t1
+            b2 += t2
+            if args.erosion == True:
+                e_data = erosion_img.view(batch_size, patch_side, patch_side, patch_side)[i]
+                t_e, t01_e, t0_e, t1_e, t2_e = topo_loss(e_data)
+                topo_e += t_e
+                b01_e += t01_e
+                b0_e += t0_e
+                b1_e += t1_e
+                b2_e += t2_e
+        topo, b01, b0, b1, b2 = topo * args.lam / batch_size, b01 * args.lam / batch_size, b0 * args.lam / batch_size, b1 * args.lam / batch_size, b2 * args.lam / batch_size
+        total_loss = REC + KLD + topo
+        if args.erosion == True:
+            topo_e, b01_e, b0_e, b1_e, b2_e = topo_e * args.lam / batch_size, b01_e * args.lam / batch_size, b0_e * args.lam / batch_size, b1_e * args.lam / batch_size, b2_e * args.lam / batch_size
+            total_loss += topo_e
+
+        return total_loss, REC, KLD, topo, b01, b0, b1, b2
+
     else:
-        total_loss = SE + KLD
-        return total_loss, SE, KLD
+        total_loss = REC + KLD
+        return total_loss, REC, KLD
 
 
-def topological_loss(recon_x, x):
-    batch_size = x.size(0)
-    b01 = 0
-    b0 = 0
-    b1 = 0
-    b2 = 0
+def topological_loss(recon_x):
+    batch_size = recon_x.size(0)
+    b01, b0, b1, b2 = 0., 0., 0., 0.
     cpx = init_tri_complex_3d(patch_side, patch_side, patch_side)
     layer = LevelSetLayer(cpx, maxdim=2, sublevel=False)
     f01 = TopKBarcodeLengths(dim=0, k=1)
@@ -226,29 +196,24 @@ def topological_loss(recon_x, x):
 
 def train(epoch):
     model.train()
-    train_loss = 0
-    b01 = 0
-    b0 = 0
-    b1 = 0
-    b2 = 0
-    SE = 0
-    KLD = 0
-    topo = 0
+    train_loss = 0.
+    SE, KLD = 0., 0.
+    topo = 0.
+    b01, b0, b1, b2 = 0., 0., 0., 0.
     for batch_idx, data in enumerate(train_loader):
         noisy_data = add_noise(data, device)
         data = data.to(device)
         noisy_data = noisy_data.to(device)
         optimizer.zero_grad()
         recon_batch, mu, logvar = model(noisy_data)
-        # loss = loss_function(recon_batch, data, mu, logvar)
-        if args.mode==2:
-            loss, l01, l0, l1, l2 = topological_loss(recon_batch, data)
+        if args.mode == 1:
+            loss, l01, l0, l1, l2 = topological_loss(recon_batch)
             train_loss += loss.item()
             b01 += l01.item()
             b0 += l0.item()
             b1 += l1.item()
             b2 += l2.item()
-        elif args.topo==True:
+        elif args.topo == True:
             loss, l_SE, l_KLD, l_topo, l01, l0, l1, l2 = loss_function(recon_batch, data, mu, logvar)
             train_loss += loss.item()
             SE += l_SE.item()
@@ -269,77 +234,67 @@ def train(epoch):
         if batch_idx % args.log_interval == 0:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 epoch, batch_idx * len(data), len(train_loader.dataset),
-                100. * batch_idx / len(train_loader),
-                loss.item() / len(noisy_data)))
+                       100. * batch_idx / len(train_loader),
+                       loss.item() / len(noisy_data)))
 
-    train_loss /= len(train_loader.dataset)
+    train_loss /= len(train_loader)
 
     train_loss_list.append(train_loss)
     print('====> Epoch: {} Average loss: {:.4f}'.format(
-          epoch, train_loss))
-    if args.topo==True:
-        b01 /= len(train_loader.dataset)
-        b0 /= len(train_loader.dataset)
-        b1 /= len(train_loader.dataset)
-        b2 /= len(train_loader.dataset)
-        topo /= len(train_loader.dataset)
-        writer.add_scalars("loss/topological_loss", {'topo': topo,
-                                                     'b01': b01,
-                                                     'b0': b0,
-                                                     'b1': b1,
-                                                     'b2': b2}, epoch)
-        viz.line(X=np.array([epoch]), Y=np.array([topo]), win='topo_loss', name='topo', update='append',
-                 opts=dict(showlegend=True))
-        viz.line(X=np.array([epoch]), Y=np.array([b01]), win='topo_loss', name='b01', update='append')
-        viz.line(X=np.array([epoch]), Y=np.array([b0]), win='topo_loss', name='b0', update='append')
-        viz.line(X=np.array([epoch]), Y=np.array([b1]), win='topo_loss', name='b1', update='append')
-        viz.line(X=np.array([epoch]), Y=np.array([b2]), win='topo_loss', name='b2', update='append')
-        viz.line(X=np.array([epoch]), Y=np.array([topo]), win='each_loss', name='Topo', update='append')
-    if args.mode!=2:
-        SE /= len(train_loader.dataset)
-        KLD /= len(train_loader.dataset)
+        epoch, train_loss))
+    if args.mode == 0:
+        SE /= len(train_loader)
+        KLD /= len(train_loader)
         writer.add_scalars("loss/each_loss", {'Train': train_loss,
                                               'Rec': SE,
                                               'KL': KLD,
                                               'Topo': topo}, epoch)
         writer.add_scalars("loss/each_loss", {'Train': train_loss,
-                                                 'Rec': SE,
-                                                 'KL': KLD}, epoch)
-        viz.line(X=np.array([epoch]), Y=np.array([train_loss]), win='each_loss', name='train', update='append',
-                 opts=dict(showlegend=True))
-        viz.line(X=np.array([epoch]), Y=np.array([SE]), win='each_loss', name='Rec', update='append')
-        viz.line(X=np.array([epoch]), Y=np.array([KLD]), win='each_loss', name='KL', update='append')
+                                              'Rec': SE,
+                                              'KL': KLD}, epoch)
+
+        if args.topo == True:
+            b01 /= len(train_loader)
+            b0 /= len(train_loader)
+            b1 /= len(train_loader)
+            b2 /= len(train_loader)
+            topo /= len(train_loader)
+            writer.add_scalars("loss/topological_loss", {'topo': topo,
+                                                         'b01': b01,
+                                                         'b0': b0,
+                                                         'b1': b1,
+                                                         'b2': b2}, epoch)
 
     return train_loss
 
 
 def val(epoch):
     model.eval()
-    val_loss = 0
+    val_loss = 0.
     with torch.no_grad():
         for i, val_data in enumerate(val_loader):
             noisy_val_data = add_noise(val_data, device)
             noisy_val_data = noisy_val_data.to(device)
             val_data = val_data.to(device)
             recon_batch, mu, logvar = model(noisy_val_data)
-            if args.mode == 2:
-                loss, _, _, _, _ = topological_loss(recon_batch, val_data)
+            if args.mode == 1:
+                loss, _, _, _, _ = topological_loss(recon_batch)
             elif args.topo == True:
                 loss, l_SE, l_KLD, l_topo, l01, l0, l1, l2 = loss_function(recon_batch, val_data, mu, logvar)
             else:
                 loss, l_SE, l_KLD = loss_function(recon_batch, val_data, mu, logvar)
             val_loss += loss.item()
-
-            # val_loss += loss_function(recon_batch, data, mu, logvar).item()
-
-    val_loss /= len(val_loader.dataset)
+    val_loss /= len(val_loader)
     val_loss_list.append(val_loss)
+    viz.line(X=np.array([epoch]), Y=np.array([val_loss]), win='val_loss', name='validation', update='append',
+             opts=dict(showlegend=True))
     print('====> val set loss: {:.4f}'.format(val_loss))
 
     return val_loss
 
+
 if __name__ == "__main__":
-    val_loss_min = 1000
+    val_loss_min = np.inf
     min_delta = 0.001
     epochs_no_improve = 0
     n_epochs_stop = args.patient
@@ -347,9 +302,10 @@ if __name__ == "__main__":
     for epoch in trange(1, args.epochs + 1):
         train_loss = train(epoch)
         val_loss = val(epoch)
-        writer.add_scalars("loss/total_loss", {'train':train_loss,
-                                    'val':val_loss}, epoch)
-        viz.line(X=np.array([epoch]), Y=np.array([train_loss]), win='loss', name='train_loss', update='append', opts=dict(showlegend=True))
+        writer.add_scalars("loss/total_loss", {'train': train_loss,
+                                               'val': val_loss}, epoch)
+        viz.line(X=np.array([epoch]), Y=np.array([train_loss]), win='loss', name='train_loss', update='append',
+                 opts=dict(showlegend=True))
         viz.line(X=np.array([epoch]), Y=np.array([val_loss]), win='loss', name='val_loss', update='append')
         with open(outdir + 'train_loss', 'wb') as f:
             cloudpickle.dump(train_loss_list, f)
@@ -372,5 +328,5 @@ if __name__ == "__main__":
 
         # Check early stopping condition
         if epochs_no_improve >= n_epochs_stop:
-            print('-'*20, 'Early stopping!', '-'*20)
+            print('-' * 20, 'Early stopping!', '-' * 20)
             break

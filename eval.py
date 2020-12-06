@@ -61,7 +61,7 @@ if not (os.path.exists(args.outdir + 'gen')):
     os.makedirs(args.outdir + 'gen/rec/')
     os.makedirs(args.outdir + 'spe/')
 
-model_path = args.outdir+"model.pkl"
+model_path = args.outdir + "model.pkl"
 
 # get data
 data_set = get_dataset(args.input, patch_side, num_of_data)
@@ -71,24 +71,25 @@ test = data[:num_of_test]
 
 # divide data
 test_data = torch.from_numpy(test).float().to(device)
-train_data = torch.from_numpy(data[num_of_test+num_of_val:]).float().to(device)
+train_data = torch.from_numpy(data[num_of_test + num_of_val:]).float().to(device)
 # test_data = add_noise(test_data, device)
 train_data = add_noise(train_data, device)
 train_loader = torch.utils.data.DataLoader(train_data,
-                          batch_size=train_data.size(0),
-                          shuffle=False,
-                          num_workers=0,
-                          pin_memory=False,
-                          drop_last=False)
+                                           batch_size=train_data.size(0),
+                                           shuffle=False,
+                                           num_workers=0,
+                                           pin_memory=False,
+                                           drop_last=False)
 test_loader = torch.utils.data.DataLoader(test_data,
-                          batch_size=1,
-                          shuffle=False,
-                          num_workers=0,
-                          pin_memory=False,
-                          drop_last=False)
+                                          batch_size=1,
+                                          shuffle=False,
+                                          num_workers=0,
+                                          pin_memory=False,
+                                          drop_last=False)
 # load model
 with open(model_path, 'rb') as f:
     model = cloudpickle.load(f)
+
 
 def gen(model):
     model.eval()
@@ -140,11 +141,15 @@ def gen(model):
             rec_image.SetSpacing([0.885, 0.885, 1])
 
             # output image
-            io.write_mhd_and_raw(ori_image, '{}.mhd'.format(os.path.join(args.outdir, 'gen/ori', '{}'.format(str(i).zfill(4)))))
-            io.write_mhd_and_raw(noisy_image, '{}.mhd'.format(os.path.join(args.outdir, 'gen/noisy', '{}'.format(str(i).zfill(4)))))
-            io.write_mhd_and_raw(rec_image, '{}.mhd'.format(os.path.join(args.outdir, 'gen/rec', '{}'.format(str(i).zfill(4)))))
+            io.write_mhd_and_raw(ori_image,
+                                 '{}.mhd'.format(os.path.join(args.outdir, 'gen/ori', '{}'.format(str(i).zfill(4)))))
+            io.write_mhd_and_raw(noisy_image,
+                                 '{}.mhd'.format(os.path.join(args.outdir, 'gen/noisy', '{}'.format(str(i).zfill(4)))))
+            io.write_mhd_and_raw(rec_image,
+                                 '{}.mhd'.format(os.path.join(args.outdir, 'gen/rec', '{}'.format(str(i).zfill(4)))))
             file_ori.write('{}.mhd'.format(os.path.join(args.outdir, 'gen/ori', '{}'.format(str(i).zfill(4)))) + "\n")
-            file_noisy.write('{}.mhd'.format(os.path.join(args.outdir, 'gen/noisy', '{}'.format(str(i).zfill(4)))) + "\n")
+            file_noisy.write(
+                '{}.mhd'.format(os.path.join(args.outdir, 'gen/noisy', '{}'.format(str(i).zfill(4)))) + "\n")
             file_rec.write('{}.mhd'.format(os.path.join(args.outdir, 'gen/rec', '{}'.format(str(i).zfill(4)))) + "\n")
 
             # calculate generalization
@@ -183,6 +188,7 @@ def gen(model):
 
     return generalization, bar_o, bar_n, bar
 
+
 # testing
 def spe(model):
     specificity = []
@@ -215,13 +221,14 @@ def spe(model):
             # calculate spe
             case_min_specificity = 1.0
             for image_index in range(num_of_test):
-                specificity_tmp = L1norm(ori[image_index] ,gen)
+                specificity_tmp = L1norm(ori[image_index], gen)
                 if specificity_tmp < case_min_specificity:
                     case_min_specificity = specificity_tmp
             specificity.append([case_min_specificity])
 
             # output image
-            io.write_mhd_and_raw(eudt_image, '{}.mhd'.format(os.path.join(args.outdir, 'spe', '{}'.format(str(j).zfill(4)))))
+            io.write_mhd_and_raw(eudt_image,
+                                 '{}.mhd'.format(os.path.join(args.outdir, 'spe', '{}'.format(str(j).zfill(4)))))
             file_gen.write('{}.mhd'.format(os.path.join(args.outdir, 'spe', '{}'.format(str(j).zfill(4)))) + "\n")
             # calculate PH
             b01, b0, b1, b2 = PH(gen)
@@ -235,6 +242,7 @@ def spe(model):
         file_gen.close()
 
     return specificity, bar
+
 
 def PH(data):
     z, y, x = data.shape
@@ -251,8 +259,8 @@ def PH(data):
     b2 = f2(dgminfo)
     return b01, b0, b1, b2
 
-if __name__ == "__main__":
 
+if __name__ == "__main__":
     # generalization
     generalization, bar_o, bar_n, bar = gen(model)
     print('generalization = %f' % np.mean(generalization))

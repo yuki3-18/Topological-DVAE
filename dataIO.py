@@ -3,6 +3,7 @@ import os
 import numpy as np
 import SimpleITK as sitk
 
+
 def read_mhd_and_raw(path, numpyFlag=True):
     """
     This function use sitk
@@ -60,12 +61,13 @@ def load_matrix_data(path, dtype):
     data = np.asarray(data)
     return data
 
+
 # load list
 def load_list(path):
     data_list = []
     with open(path) as paths_file:
         for line in paths_file:
             if not line: continue
-            line = line.replace('\n','')
+            line = line.replace('\n', '')
             data_list.append(line[:])
     return data_list
